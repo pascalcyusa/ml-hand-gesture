@@ -5,6 +5,7 @@ import WebcamPanel from './WebcamPanel.jsx';
 import ClassCard from './ClassCard.jsx';
 import PredictionBars from './PredictionBars.jsx';
 import TrainingControls from './TrainingControls.jsx';
+import AIRecipeCard from './AIRecipeCard.jsx';
 import LoadingOverlay from '../common/LoadingOverlay.jsx';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '../../utils/helpers.js';
 import './TrainTab.css';
@@ -13,6 +14,12 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [savedModels, setSavedModels] = useState([]);
+    const [aiRecipe, setAiRecipe] = useState(null);
+
+    useEffect(() => {
+        console.log('--- AI RECIPE STATE CHANGE ---', aiRecipe);
+    }, [aiRecipe]);
+
     const [isCameraStarted, setIsCameraStarted] = useState(hand.wasStarted || hand.isRunning);
     const videoReadyRef = useRef(false);
 
@@ -41,10 +48,18 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
             setShowLoadingOverlay(true);
             setLoadingMessage('Loading hand detection model...');
         }
-        await hand.start(videoEl, canvasEl);
-        if (needsModelLoad) {
-            setShowLoadingOverlay(false);
-            showToast('Hand detection ready!', 'success');
+        try {
+            await hand.start(videoEl, canvasEl);
+            if (needsModelLoad) {
+                showToast('Hand detection ready!', 'success');
+            }
+        } catch (err) {
+            console.error('Hand detection start error:', err);
+            showToast('Failed to start hand detection', 'error');
+        } finally {
+            if (needsModelLoad) {
+                setShowLoadingOverlay(false);
+            }
         }
     }, [hand, showToast]);
 
@@ -81,25 +96,47 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
         setShowLoadingOverlay(true);
         setLoadingMessage('Training model...');
 
-        const trainingData = cm.getTrainingData();
+        try {
+            const trainingData = cm.getTrainingData();
 
-        if (auth.user) {
-            setLoadingMessage('Backing up training data...');
-            await storage.saveTrainingSession(cm.classNames, {
-                features: trainingData.features,
-                labels: trainingData.labels
-            });
-            setLoadingMessage('Training model...');
-        }
+            if (auth.user) {
+                setLoadingMessage('Backing up training data...');
+                await storage.saveTrainingSession(cm.classNames, {
+                    features: trainingData.features,
+                    labels: trainingData.labels
+                });
+                setLoadingMessage('Training model...');
+            }
 
-        const success = await trainer.train(trainingData);
-        setShowLoadingOverlay(false);
+            const success = await trainer.train(trainingData);
 
-        if (success) {
-            showToast('Model trained successfully!', 'success');
-            prediction.startPredicting();
-        } else {
-            showToast('Training failed — check console', 'error');
+            if (success) {
+                showToast('Model trained successfully!', 'success');
+                prediction.startPredicting();
+
+                // Generate AI Recipe
+                if (auth.user) {
+                    console.log('User is logged in, generating AI recipe for:', cm.classNames);
+                    setLoadingMessage('AI is generating a gesture recipe...');
+                    const result = await storage.generateAIRecipe(cm.classNames);
+                    console.log('AI recipe result:', result);
+                    if (result && !result.error) {
+                        setAiRecipe(result);
+                        showToast('AI Gesture Recipe generated!', 'success');
+                    } else if (result && result.error) {
+                        showToast(`AI Recipe Error: ${result.error}`, 'warning');
+                    }
+                } else {
+                    showToast('Log in to unlock AI-powered gesture recipes!', 'info');
+                }
+            } else {
+                showToast('Training failed — check console', 'error');
+            }
+        } catch (err) {
+            console.error('Training handler error:', err);
+            showToast('An unexpected error occurred during training', 'error');
+        } finally {
+            setShowLoadingOverlay(false);
         }
     }, [cm, trainer, prediction, showToast, auth, storage]);
 
@@ -108,6 +145,7 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
         prediction.stopPredicting();
         trainer.resetModel();
         cm.reset();
+        setAiRecipe(null);
         showToast('All data cleared', 'info');
     }, [prediction, trainer, cm, showToast]);
 
@@ -217,26 +255,28 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
 
                 {/* Right Panel */}
                 <div className="train-right">
-                    <div className="train-classes">
-                        <h2 className="train-section-title">
-                            Gesture Classes
-                        </h2>
-                        <div className="train-classes-list">
-                            {cm.classes.map((cls, index) => (
-                                <ClassCard
-                                    /* * FIX: Use cls.id if available, otherwise fallback to index.
-                                     * This prevents the 'coupling' bug if IDs are missing.
-                                     */
-                                    key={cls.id || index}
-                                    classData={cls}
-                                    onCollect={handleCollect}
-                                    onDeleteSample={cm.deleteSample}
-                                    onDelete={cm.deleteClass}
-                                    currentLandmarks={hand.currentLandmarks}
-                                />
-                            ))}
+                    <div className="train-main-content">
+                        <div className="train-classes-header flex justify-between items-center mb-4">
+                            <h2 className="train-section-title mb-0">
+                                Gesture Classes
+                            </h2>
                         </div>
-                    </div>
+                        <div className="train-classes-list">
+                                {cm.classes.map((cls, index) => (
+                                    <ClassCard
+                                        /* * FIX: Use cls.id if available, otherwise fallback to index.
+                                         * This prevents the 'coupling' bug if IDs are missing.
+                                         */
+                                        key={cls.id || index}
+                                        classData={cls}
+                                        onCollect={handleCollect}
+                                        onDeleteSample={cm.deleteSample}
+                                        onDelete={cm.deleteClass}
+                                        currentLandmarks={hand.currentLandmarks}
+                                    />
+                                ))}
+                            </div>
+                        </div>
 
                     <div className="train-predictions">
                         <PredictionBars
@@ -244,6 +284,13 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
                             classNames={cm.classNames}
                             threshold={prediction.confidenceThreshold}
                         />
+                        <div className="ai-recipe-container mt-6">
+                            <AIRecipeCard 
+                                recipe={aiRecipe} 
+                                onClear={() => setAiRecipe(null)} 
+                                user={auth.user}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

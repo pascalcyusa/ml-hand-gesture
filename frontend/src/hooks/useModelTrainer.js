@@ -83,7 +83,7 @@ export function useModelTrainer() {
                                 epoch: epoch + 1,
                                 totalEpochs: epochs,
                                 loss: logs.loss,
-                                accuracy: logs.acc,
+                                accuracy: logs.accuracy || logs.acc,
                             });
                         },
                     },

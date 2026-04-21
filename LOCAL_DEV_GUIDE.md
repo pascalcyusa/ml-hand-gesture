@@ -46,9 +46,9 @@ This project is compatible with the latest versions of Docker. If you are using 
    ```
 4. Start the backend server:
    ```
-   uvicorn main:app --reload
+   uvicorn main:app --reload --port 8002
    ```
-   The backend should now be running at [http://localhost:8000](http://localhost:8000).
+   The backend should now be running at [http://localhost:8002](http://localhost:8002).
 
 ---
 
@@ -68,7 +68,7 @@ This project is compatible with the latest versions of Docker. If you are using 
    ```
    bun run dev
    ```
-   The frontend should now be running at [http://localhost:5173](http://localhost:5173) (or as indicated in the terminal).
+   The frontend should now be running at [http://localhost:5174](http://localhost:5174) (or as indicated in the terminal).
 
 ### Other common Bun commands
 
@@ -106,7 +106,7 @@ If you prefer to use Docker for both frontend and backend:
 
 ## 5. Common Issues
 
-- Ensure ports 8000 (backend) and 5173 (frontend) are free.
+- Ensure ports 8002 (backend) and 5174 (frontend) are free.
 - If you change backend code, restart the backend server.
 - For environment variables, check `.env` files or config files in each directory.
 

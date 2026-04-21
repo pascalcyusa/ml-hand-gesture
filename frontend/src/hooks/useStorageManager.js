@@ -336,6 +336,38 @@ export function useStorageManager() {
         }
     }, [getHeaders]);
 
+    const generateAIRecipe = useCallback(async (classNames) => {
+        try {
+            const headers = getHeaders();
+            console.log("AI Recipe: getHeaders returned", !!headers.Authorization);
+            if (!headers.Authorization) return { error: "You must be logged in to use AI features" };
+
+            console.log("AI Recipe: fetching from", `${API_Base}/ai/recipe`);
+            const res = await fetch(`${API_Base}/ai/recipe`, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ class_names: classNames }),
+            });
+
+            console.log("AI Recipe: response status", res.status);
+            if (res.ok) {
+                const data = await res.json();
+                console.log("AI Recipe: response data", data);
+                return data;
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                console.log("AI Recipe: error data", errData);
+                return { error: errData.detail || `Server error: ${res.status}` };
+            }
+        } catch (err) {
+            console.error("AI Recipe error:", err);
+            return { error: `Connection error: ${err.message}` };
+        }
+    }, [getHeaders]);
+
     return useMemo(() => ({
         saveModel,
         listMyModels,
@@ -355,6 +387,7 @@ export function useStorageManager() {
         updateModelVisibility,
         updatePianoVisibility,
         updateGestureVisibility,
+        generateAIRecipe,
     }), [
         saveModel,
         listMyModels,
@@ -374,5 +407,6 @@ export function useStorageManager() {
         updateModelVisibility,
         updatePianoVisibility,
         updateGestureVisibility,
+        generateAIRecipe,
     ]);
 }

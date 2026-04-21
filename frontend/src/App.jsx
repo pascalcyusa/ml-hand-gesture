@@ -90,7 +90,7 @@ export default function App() {
       prediction.startPredicting();
       console.log('Auto-started predictions (model restored from session)');
     }
-  }, [trainer.isTrained, hand.isRunning, prediction.isPredicting, prediction.startPredicting]);
+  }, [trainer.isTrained, hand.isRunning, prediction.isPredicting, prediction]);
 
   // Import community model into local training
   const handleImportCommunityModel = useCallback(async (cloudModel) => {

@@ -18,6 +18,14 @@ Endpoints:
 """
 
 import os
+import json
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Ensure .env is loaded from the backend directory regardless of where the server is started
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -25,7 +33,8 @@ from starlette.responses import Response
 from sqlalchemy.orm import Session
 from database import engine, get_db
 import models
-from pydantic import BaseModel, Field, field_validator
+from google import genai
+from pydantic import BaseModel, Field, field_validator, ConfigDict, SecretStr
 from typing import List, Optional, Any
 from auth import (
     hash_password,
@@ -52,8 +61,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — allow frontend dev server and production domains
 # CORS and Frontend settings from environment
-origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5174,http://localhost:3000,http://127.0.0.1:5174")
+origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5174")
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,7 +94,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 class SignupRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
     email: str = Field(..., min_length=3, max_length=255)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=4, max_length=128)
 
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=255)
@@ -98,10 +108,16 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: str
 
-    class Config:
-        from_attributes = True
+class AIRecipeRequest(BaseModel):
+    class_names: List[str]
+
+class AIRecipeResponse(BaseModel):
+    recipe_name: str
+    description: str
+    suggested_use_cases: List[str]
+
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelSaveRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -124,8 +140,7 @@ class ModelListItem(BaseModel):
     created_at: str
     author: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelDetail(ModelListItem):
     model_data: dict
@@ -770,3 +785,100 @@ def list_community_piano(
         )
         for s in results
     ]
+
+
+# ── AI Recipe Generation ──────────────────────────────
+@app.post("/ai/recipe", response_model=AIRecipeResponse)
+@limiter.limit("5/minute")
+async def generate_gesture_recipe(
+    request: Request,
+    data: AIRecipeRequest,
+    user: models.User = Depends(require_user),
+):
+    import traceback
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("AI Recipe Error: API Key missing from environment")
+        raise HTTPException(status_code=500, detail="Google API Key not configured")
+
+    try:
+        print(f"AI Recipe: Using key (first 4): {api_key[:4]}...")
+        print(f"AI Recipe: Class names received: {data.class_names}")
+        
+        client = genai.Client(api_key=api_key)
+        from google.genai import types
+        
+        # Log available models for debugging
+        try:
+            available_models = [m.name for m in client.models.list()]
+            print(f"AI Recipe: Available models: {available_models}")
+        except Exception as list_err:
+            print(f"AI Recipe: Could not list models: {list_err}")
+
+        prompt = f"""
+        You are an expert in human-computer interaction and machine learning.
+        The user has just trained a hand gesture recognition model with the following gesture class names:
+        {", ".join(data.class_names)}
+
+        Based on these gesture names, create a "Gesture Recipe Card".
+        Respond ONLY with a valid JSON object.
+        JSON structure:
+        {{
+          "recipe_name": "Creative Name",
+          "description": "Short engaging description",
+          "suggested_use_cases": ["Case 1", "Case 2", "Case 3"]
+        }}
+        """
+
+        print("AI Recipe: Sending request to Gemini...")
+
+        # Try a list of models in order of preference
+        models_to_try = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]
+        last_exception = None
+        response = None
+
+        for model_name in models_to_try:
+            try:
+                print(f"AI Recipe: Attempting with model: {model_name}")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type='application/json',
+                    )
+                )
+                print(f"AI Recipe: Success with {model_name}")
+                break # Exit loop on success
+            except Exception as e:
+                print(f"AI Recipe: Model {model_name} failed: {e}")
+                last_exception = e
+                continue # Try next model
+
+        if not response:
+            raise last_exception or Exception("All models failed to generate content")
+
+        try:
+            raw_text = response.text.strip()
+            print(f"AI Recipe: Raw response text: {raw_text[:200]}...")
+            
+            # Minimal cleaning for safety
+            if raw_text.startswith("```"):
+                import re
+                raw_text = re.sub(r'^```(?:json)?\n?|\n?```$', '', raw_text, flags=re.MULTILINE).strip()
+                
+            recipe_data = json.loads(raw_text)
+            return AIRecipeResponse(**recipe_data)
+        except Exception as parse_err:
+            print(f"AI Response Parsing Error: {parse_err}. Raw text: {response.text}")
+            raise HTTPException(status_code=500, detail=f"AI returned invalid format: {str(parse_err)}")
+
+    except Exception as e:
+        print("AI Generation Error Exception Type:", type(e).__name__)
+        print("AI Generation Error Message:", str(e))
+        traceback.print_exc()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Failed to generate recipe: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)

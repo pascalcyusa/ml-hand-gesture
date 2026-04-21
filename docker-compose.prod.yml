@@ -7,13 +7,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: hand_pose_backend_prod
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+    command: uvicorn main:app --host 0.0.0.0 --port 8002 --workers 4
     ports:
-      - "8000:8000"
+      - "8002:8002"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/ml_hand_gesture_db
       - SECRET_KEY=changeme_in_production
-      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+      - ALLOWED_ORIGINS=http://localhost:5174,http://localhost:3000
     depends_on:
       - db
     restart: unless-stopped
