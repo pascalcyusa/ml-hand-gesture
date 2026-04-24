@@ -1,5 +1,3 @@
-# ML Hand Gesture
-
 [![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?logo=react)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![TensorFlow.js](https://img.shields.io/badge/ML-TensorFlow.js-FF6F00?logo=tensorflow)](https://www.tensorflow.org/js)
@@ -7,11 +5,17 @@
 [![Gemini](https://img.shields.io/badge/AI-Gemini%202.0%20Flash-4285F4?logo=googlegemini)](https://deepmind.google/technologies/gemini/)
 [![GCP](https://img.shields.io/badge/Cloud-Google%20Cloud%20Run-4285F4?logo=googlecloud)](https://cloud.google.com/run)
 
-**ML Hand Gesture** is a browser-native platform for training custom hand gesture models in seconds and using them to control real-world hardware and interactive software. No cloud uploads, no latency, 100% privacy.
+## ML Hand Gesture
+
+This is a browser-native platform for training custom hand gesture models in seconds and using them to control real-world hardware and interactive software. No cloud uploads, no latency, 100% privacy.
+
+## Video Walkthrough
+
+[![ML Hand Gesture](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
 
 ---
 
-## I. The Problem: The "Cloud Latency" Barrier in AI Interaction
+## I. Problem Statement
 
 Most modern AI tools require sending data to a server for inference. For interactive experiences—like playing a virtual piano or controlling a robotic motor—even 200ms of latency feels "broken." Furthermore, privacy concerns often prevent users from sharing camera feeds with cloud providers.
 
@@ -19,7 +23,7 @@ Most modern AI tools require sending data to a server for inference. For interac
 
 ---
 
-## II. Solution Overview: Train, Connect, Control
+## II. Solution Overview
 
 ML Hand Gesture provides a seamless "Zero-to-Hero" workflow for custom AI interaction:
 
@@ -43,14 +47,14 @@ ML Hand Gesture provides a seamless "Zero-to-Hero" workflow for custom AI intera
 | **Logic/Auth**      | FastAPI       | Python Backend          | Secure session and model metadata.      |
 | **Synthesis**       | Gemini 2.0    | LLM Recipe Generation   | Contextualize the "why" of the gesture. |
 
-### Design Tradeoffs
+## IV. Design Decisions
 
-- **Edge vs. Cloud:** We chose **Client-Side MLP** over Cloud CNNs. While CNNs are more robust, the landmark-based MLP is 100x faster for real-time interaction and requires zero server-side GPU costs.
+- **Edge vs. Cloud:** I chose **Client-Side MLP** over Cloud CNNs. While CNNs are more robust, the landmark-based MLP is 100x faster for real-time interaction and requires zero server-side GPU costs.
 - **Stateless vs. Statefull:** The backend is entirely **Stateless (Docker on Cloud Run)**, allowing it to scale from zero to infinity without managing persistent VMs.
 
 ---
 
-## IV. The "Agentic" Build: AI as a Force Multiplier
+## V. What did AI help you do faster, and where did it get in your way?
 
 This project was built using a "Director-Level" development approach, orchestrating multiple specialized AI agents:
 
@@ -62,7 +66,7 @@ This project was built using a "Director-Level" development approach, orchestrat
 
 ---
 
-## V. Getting Started
+## VI. Getting Started
 
 ### 1. Prerequisites
 
@@ -80,7 +84,10 @@ cd ml-hand-gesture
 # Setup Backend
 cd backend
 pip install -r requirements.txt
-cp .env.example .env # Add your GEMINI_API_KEY and DATABASE_URL
+# Add your GEMINI_API_KEY and DATABASE_URL to .env
+cp backend/.env.example backend/.env
+
+# Run backend
 python main.py
 
 # Setup Frontend (New Terminal)
@@ -91,7 +98,11 @@ bun run dev
 
 ---
 
-## VI. Testing & Error Handling
+## VII. Demo
+
+Explain how to use your application or run demos. Include screenshots, example commands, or links to videos if helpful.
+
+## VIII. Testing / Error Handling
 
 - **Hardware Robustness:** The `useSpikeDevice` hook implements a robust "Heartbeat" and "Retry" logic to handle BLE disconnections without crashing the UI.
 - **Fail-Safe Inference:** If the webcam fails or landmarks are lost, the prediction engine gracefully enters a "Wait" state rather than outputting garbage data.
@@ -99,11 +110,17 @@ bun run dev
 
 ---
 
-## VII. Future Improvements
+## IX. Future Improvements / Stretch Goals
 
 - **Multi-Hand Interaction:** Extend the MLP to recognize two-handed gestures for more complex MIDI control.
 - **Gesture Recording:** Record sequences of gestures to create "Action Macros."
 - **Unity/VST Integration:** Export trained models as a bridge to professional music production software.
+
+---
+
+## X. Link to website URL
+
+https://ml-hand-gesture.netlify.app/
 
 ---
 

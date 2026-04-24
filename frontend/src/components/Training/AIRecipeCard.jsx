@@ -93,7 +93,7 @@ export default function AIRecipeCard({
       <div className="ai-recipe-body">
         {recipe.ml_feedback && (
           <div className="ai-recipe-feedback">
-            <strong>Coach Feedback</strong>
+            <strong>Feedback</strong>
             <p>{recipe.ml_feedback}</p>
           </div>
         )}
