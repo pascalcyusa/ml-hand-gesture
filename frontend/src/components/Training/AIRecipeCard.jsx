@@ -1,5 +1,11 @@
 import React, { useState, useCallback } from "react";
-import { XMarkIcon, MusicalNoteIcon, CogIcon, SparklesIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
+import {
+  XMarkIcon,
+  MusicalNoteIcon,
+  CogIcon,
+  SparklesIcon,
+  ChevronDownIcon,
+} from "@heroicons/react/24/outline";
 import "./AIRecipeCard.css";
 
 export default function AIRecipeCard({
@@ -13,8 +19,8 @@ export default function AIRecipeCard({
 
   const toggleExpanded = useCallback((e) => {
     // Prevent toggle if clicking buttons
-    if (e.target.closest('button')) return;
-    setIsExpanded(prev => !prev);
+    if (e.target.closest("button")) return;
+    setIsExpanded((prev) => !prev);
   }, []);
 
   // Check if recipe exists and has the expected properties
@@ -50,28 +56,35 @@ export default function AIRecipeCard({
   }
 
   return (
-    <div className={`ai-recipe-card ${isExpanded ? 'is-expanded' : ''}`} data-testid="ai-recipe-card">
-      <div className="ai-recipe-header" onClick={toggleExpanded} style={{ cursor: 'pointer' }}>
+    <div
+      className={`ai-recipe-card ${isExpanded ? "is-expanded" : ""}`}
+      data-testid="ai-recipe-card"
+    >
+      <div
+        className="ai-recipe-header"
+        onClick={toggleExpanded}
+        style={{ cursor: "pointer" }}
+      >
         <h3>
           <SparklesIcon className="w-5 h-5 inline mr-2 text-[var(--gold)]" />
-          AI Recipe: {recipe.recipe_name}
+          AI Recipe
         </h3>
-        
+
         <div className="ai-recipe-header-actions">
-          <button 
-            className="ai-recipe-close" 
+          <button
+            className="ai-recipe-close"
             onClick={(e) => {
               e.stopPropagation();
               onClear();
-            }} 
+            }}
             title="Close Recipe"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
-          
+
           <div className="ai-recipe-chevron-wrapper">
             <ChevronDownIcon
-              className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+              className={`h-5 w-5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
             />
           </div>
         </div>

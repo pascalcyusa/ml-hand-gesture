@@ -171,7 +171,7 @@ export default function Header({ user, onSignIn, onLogout }) {
                     >
                       <div className="flex items-center gap-2 w-full">
                         <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                        <span>Sign Out</span>
+                        <span>Log Out</span>
                       </div>
                     </button>
                     <div className="dropdown-divider"></div>

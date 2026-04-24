@@ -116,6 +116,22 @@ Now we deploy the React frontend and connect it to your running backend.
 
 ---
 
+## Part 5: Optimization (Optional)
+
+### 1. Optimize Cloud Build Triggers
+By default, Cloud Build may trigger a backend redeployment even if you only changed a frontend CSS file. To save build minutes and avoid cluttering your deployment history:
+
+1.  Go to the [Cloud Build Triggers page](https://console.cloud.google.com/cloud-build/triggers) in GCP Console.
+2.  Click **Edit** on your trigger.
+3.  Scroll down to the **"Included files"** section.
+4.  Add: `backend/**`
+5.  (Recommended) Also add `cloudbuild.yaml` so the build triggers if you change deployment settings.
+6.  Click **Save**.
+
+Now, Google Cloud will stay quiet if you only update the React frontend, allowing Netlify to handle those changes independently.
+
+---
+
 ## Troubleshooting
 
 -   **CORS Errors:** Check the Browser Console. If you see "CORS error", verify that the `ALLOWED_ORIGINS` env var on Cloud Run matches the URL in your browser address bar exactly.
