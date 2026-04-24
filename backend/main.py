@@ -56,6 +56,43 @@ from slowapi.errors import RateLimitExceeded
 # Create tables (with resilience for connection lag)
 try:
     models.Base.metadata.create_all(bind=engine)
+    
+    # ── Automatic Migrations ──
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Add ai_recipe to saved_models
+        try:
+            if "sqlite" in str(engine.url):
+                conn.execute(text("ALTER TABLE saved_models ADD COLUMN ai_recipe JSON;"))
+            else:
+                conn.execute(text("ALTER TABLE saved_models ADD COLUMN IF NOT EXISTS ai_recipe JSON;"))
+            conn.commit()
+            print("Migration: Added ai_recipe to saved_models")
+        except Exception:
+            pass # Column likely already exists
+
+        # Add is_public to piano_sequences
+        try:
+            if "sqlite" in str(engine.url):
+                conn.execute(text("ALTER TABLE piano_sequences ADD COLUMN is_public BOOLEAN DEFAULT FALSE;"))
+            else:
+                conn.execute(text("ALTER TABLE piano_sequences ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;"))
+            conn.commit()
+            print("Migration: Added is_public to piano_sequences")
+        except Exception:
+            pass
+
+        # Add is_public to motor_configs
+        try:
+            if "sqlite" in str(engine.url):
+                conn.execute(text("ALTER TABLE motor_configs ADD COLUMN is_public BOOLEAN DEFAULT FALSE;"))
+            else:
+                conn.execute(text("ALTER TABLE motor_configs ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;"))
+            conn.commit()
+            print("Migration: Added is_public to motor_configs")
+        except Exception:
+            pass
+
 except Exception as e:
     print(f"Startup Warning: Could not initialize database tables: {e}")
 
@@ -317,35 +354,52 @@ class ResetPasswordRequest(BaseModel):
 @app.post("/auth/forgot-password")
 @limiter.limit("3/minute")
 async def forgot_password(request: Request, req: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == req.email).first()
-    if not user:
-        # Don't reveal if user exists
-        return {"detail": "If that email exists, a reset link has been sent."}
-
-    # Generate token
-    import uuid
-    from datetime import datetime, timedelta
-    
-    token = str(uuid.uuid4())
-    expires = datetime.utcnow() + timedelta(hours=1)
-    
-    reset_token = models.PasswordResetToken(
-        user_id=user.id,
-        token=token,
-        expires_at=expires
-    )
-    db.add(reset_token)
-    db.commit()
-
-    reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
+    print(f"DEBUG: Forgot password request received for email: {req.email}")
     try:
-        await send_reset_email(req.email, reset_link)
-    except Exception as e:
-        print(f"Failed to send reset email to {req.email}: {e}")
-        # We still return success message to avoid user enumeration, 
-        # but the dev can check logs to see why the email didn't go out.
+        user = db.query(models.User).filter(models.User.email == req.email).first()
+        if not user:
+            print(f"DEBUG: No user found for email: {req.email}")
+            return {"detail": "If that email exists, a reset link has been sent."}
 
-    return {"detail": "If that email exists, a reset link has been sent."}
+        print(f"DEBUG: User found: {user.username}. Generating token...")
+        import uuid
+        from datetime import datetime, timedelta
+        
+        token = str(uuid.uuid4())
+        expires = datetime.utcnow() + timedelta(hours=1)
+        
+        try:
+            reset_token = models.PasswordResetToken(
+                user_id=user.id,
+                token=token,
+                expires_at=expires
+            )
+            db.add(reset_token)
+            db.commit()
+            print("DEBUG: Reset token saved to database.")
+        except Exception as db_err:
+            print(f"DATABASE ERROR in forgot_password: {db_err}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Database error while saving reset token.")
+
+        reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
+        print(f"DEBUG: Attempting to send email to {req.email}...")
+        
+        try:
+            await send_reset_email(req.email, reset_link)
+            print("DEBUG: Email sent successfully.")
+        except Exception as email_err:
+            print(f"EMAIL ERROR in forgot_password: {email_err}")
+            # We don't raise here so the user still gets the success message
+
+        return {"detail": "If that email exists, a reset link has been sent."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"UNEXPECTED ERROR in forgot_password: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
 
 
 @app.post("/auth/reset-password")
