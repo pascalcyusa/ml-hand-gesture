@@ -73,10 +73,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 0;
+    padding-bottom: var(--space-sm, 8px);
+    transition: margin-bottom 0.3s ease;
+}
+
+.ai-recipe-card.is-expanded .ai-recipe-header {
     margin-bottom: var(--space-md, 16px);
     border-bottom: 1px solid rgba(213, 182, 100, 0.1);
-    padding-bottom: var(--space-sm, 8px);
-    padding-right: 40px;
 }
 
 .ai-recipe-header h3 {
@@ -85,6 +89,17 @@
     font-size: 1.1rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 12px;
+}
+
+.ai-recipe-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .ai-recipe-close {
@@ -99,11 +114,30 @@
     cursor: pointer;
     color: var(--fg-muted);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 10;
     padding: 0;
+    position: relative; /* Remove absolute positioning */
+    top: auto;
+    right: auto;
+}
+
+.ai-recipe-chevron-wrapper {
+    color: var(--fg-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ai-recipe-body {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ai-recipe-card.is-expanded .ai-recipe-body {
+    max-height: 2000px;
+    opacity: 1;
+    overflow: visible;
 }
 
 .ai-recipe-close:hover {
