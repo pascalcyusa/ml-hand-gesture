@@ -73,7 +73,7 @@ export default function WebcamPanel({ onVideoReady, isDetecting, isStarted, onSt
 
             <div className="webcam-footer">
                 <span className={`status-badge ${isDetecting ? 'status-badge-ready' : 'status-badge-warning'}`}>
-                    {isDetecting ? '● Detecting' : '○ Idle'}
+                    {isDetecting ? '● AI is Watching' : '○ Waiting'}
                 </span>
             </div>
         </div>

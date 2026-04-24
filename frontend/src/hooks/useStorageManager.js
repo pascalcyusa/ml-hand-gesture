@@ -15,7 +15,7 @@ export function useStorageManager() {
 
     // ── Models ──
 
-    const saveModel = useCallback(async (name, modelTopology, weightSpecs, weightData, classNames, dataset = null, isPublic = false) => {
+    const saveModel = useCallback(async (name, modelTopology, weightSpecs, weightData, classNames, dataset = null, aiRecipe = null, isPublic = false) => {
         try {
             const headers = getHeaders();
             if (!headers.Authorization) return false;
@@ -29,6 +29,7 @@ export function useStorageManager() {
                     weightData, // Base64 encoded by caller
                 },
                 dataset, // { features: [...], labels: [...] }
+                ai_recipe: aiRecipe,
                 is_public: isPublic,
             };
 
@@ -336,7 +337,7 @@ export function useStorageManager() {
         }
     }, [getHeaders]);
 
-    const generateAIRecipe = useCallback(async (classNames) => {
+    const generateAIRecipe = useCallback(async (classNames, datasetStats = null) => {
         try {
             const headers = getHeaders();
             console.log("AI Recipe: getHeaders returned", !!headers.Authorization);
@@ -349,7 +350,7 @@ export function useStorageManager() {
                     ...headers,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ class_names: classNames }),
+                body: JSON.stringify({ class_names: classNames, dataset_stats: datasetStats }),
             });
 
             console.log("AI Recipe: response status", res.status);

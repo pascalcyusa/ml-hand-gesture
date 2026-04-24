@@ -111,11 +111,15 @@ class UserResponse(BaseModel):
 
 class AIRecipeRequest(BaseModel):
     class_names: List[str]
+    dataset_stats: Optional[dict] = None
 
 class AIRecipeResponse(BaseModel):
     recipe_name: str
     description: str
     suggested_use_cases: List[str]
+    ml_feedback: Optional[str] = None
+    motor_config: Optional[dict] = None
+    piano_config: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -125,6 +129,7 @@ class ModelSaveRequest(BaseModel):
     class_names: list = Field(..., max_length=50)
     model_data: dict   # { modelTopology, weightSpecs, weightData }
     dataset: Optional[dict] = None # { features: [], labels: [] }
+    ai_recipe: Optional[AIRecipeResponse] = None
     is_public: bool = False
 
     model_config = {
@@ -145,6 +150,7 @@ class ModelListItem(BaseModel):
 class ModelDetail(ModelListItem):
     model_data: dict
     dataset: Optional[dict]
+    ai_recipe: Optional[AIRecipeResponse] = None
 
     model_config = {
         "protected_namespaces": ()
@@ -404,6 +410,7 @@ def save_model(req: ModelSaveRequest, user: models.User = Depends(require_user),
         existing.class_names = req.class_names
         existing.model_data = req.model_data
         existing.dataset = req.dataset
+        existing.ai_recipe = req.ai_recipe.model_dump() if req.ai_recipe else None
         existing.is_public = req.is_public
         db.commit()
         db.refresh(existing)
@@ -416,6 +423,7 @@ def save_model(req: ModelSaveRequest, user: models.User = Depends(require_user),
             class_names=req.class_names,
             model_data=req.model_data,
             dataset=req.dataset,
+            ai_recipe=req.ai_recipe.model_dump() if req.ai_recipe else None,
             is_public=req.is_public,
         )
         db.add(m)
@@ -489,6 +497,7 @@ def get_model(
         author=m.user.username,
         model_data=m.model_data,
         dataset=m.dataset,
+        ai_recipe=m.ai_recipe,
     )
 
 
@@ -804,6 +813,7 @@ async def generate_gesture_recipe(
     try:
         print(f"AI Recipe: Using key (first 4): {api_key[:4]}...")
         print(f"AI Recipe: Class names received: {data.class_names}")
+        print(f"AI Recipe: Stats received: {data.dataset_stats}")
         
         client = genai.Client(api_key=api_key)
         from google.genai import types
@@ -816,17 +826,39 @@ async def generate_gesture_recipe(
             print(f"AI Recipe: Could not list models: {list_err}")
 
         prompt = f"""
-        You are an expert in human-computer interaction and machine learning.
-        The user has just trained a hand gesture recognition model with the following gesture class names:
-        {", ".join(data.class_names)}
+        You are a friendly Machine Learning Coach for middle school students.
+        The students are using this app to teach an AI to recognize hand gestures, which they then use to control LEGO Spike Prime robots and motors.
+        
+        The student just trained a model with these gesture names: {", ".join(data.class_names)}
 
-        Based on these gesture names, create a "Gesture Recipe Card".
+        Data Quality Stats (for your internal analysis):
+        {json.dumps(data.dataset_stats) if data.dataset_stats else "No statistical data available yet."}
+
+        Create a fun "Gesture Recipe Card" that helps them see what their model can do!
+
+        Your goals:
+        1. ML Coach Feedback ('ml_feedback'): Look at the stats. If there's high overlap or low variance, explain it like a coach. 
+           Instead of "variance" or "geometric distance", use terms like "shaky hands", "too similar", or "need more variety". 
+           BE ENCOURAGING. Example: "Great start! Your 'Wave' and 'High Five' look a bit similar to the AI. Try holding your hand at different angles to help it learn the difference!"
+        2. Interaction Designer: 
+           - 'recipe_name': Give it a cool, robotic, or creative name.
+           - 'description': Explain how these gestures could be used to control a robot.
+           - 'suggested_use_cases': List 3 fun ideas involving LEGO motors or robots (e.g., "Make a robot arm grab a snack", "Drive a rover through a maze").
+        3. Technical Integrator:
+           - 'motor_config': Map each gesture to a LEGO motor action. 
+             Actions: "run_for_degrees", "run_for_time", "start", "stop". Ports: "A", "B", "C", "D", "E", "F".
+             Example: {{ "Class1": [ {{ "port": "A", "action": "run_for_degrees", "speed": 50, "degrees": 90, "direction": "clockwise" }} ] }}
+           - 'piano_config': Map each gesture to a fun sound or note sequence (C3 to C5).
+
         Respond ONLY with a valid JSON object.
         JSON structure:
         {{
-          "recipe_name": "Creative Name",
-          "description": "Short engaging description",
-          "suggested_use_cases": ["Case 1", "Case 2", "Case 3"]
+          "recipe_name": "Cool Robot Command",
+          "description": "How this helps your LEGO creation come to life!",
+          "suggested_use_cases": ["Idea 1", "Idea 2", "Idea 3"],
+          "ml_feedback": "Encouraging tips for better training",
+          "motor_config": {{ ... }},
+          "piano_config": {{ ... }}
         }}
         """
 
