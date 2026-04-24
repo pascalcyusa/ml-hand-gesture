@@ -338,7 +338,12 @@ async def forgot_password(request: Request, req: ForgotPasswordRequest, db: Sess
     db.commit()
 
     reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
-    await send_reset_email(req.email, reset_link)
+    try:
+        await send_reset_email(req.email, reset_link)
+    except Exception as e:
+        print(f"Failed to send reset email to {req.email}: {e}")
+        # We still return success message to avoid user enumeration, 
+        # but the dev can check logs to see why the email didn't go out.
 
     return {"detail": "If that email exists, a reset link has been sent."}
 
