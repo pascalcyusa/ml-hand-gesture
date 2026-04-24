@@ -9,7 +9,7 @@
     grid-template-columns: 380px 1fr;
     gap: var(--space-xl);
     align-items: start;
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
     padding: var(--space-lg);
 }
@@ -50,7 +50,7 @@
 @media (min-width: 1280px) {
     .train-right {
         display: grid;
-        grid-template-columns: 1fr 280px;
+        grid-template-columns: 1fr 400px;
         align-items: start;
         gap: var(--space-lg);
     }

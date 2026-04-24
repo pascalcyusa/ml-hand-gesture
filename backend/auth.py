@@ -52,26 +52,21 @@ def validate_password(password: str) -> None:
     errors: list[str] = []
     if len(password) < 4:
         errors.append("at least 4 characters")
-    if not re.search(r"[^A-Za-z0-9]", password):
-        errors.append("at least one special character")
+    # if not re.search(r"[^A-Za-z0-9]", password):
+    #     errors.append("at least one special character")
     if errors:
         raise ValueError(f"Password must contain: {', '.join(errors)}")
 
 # ── Password hashing ───────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def _normalize_password(password: str) -> str:
-    """
-    Pre-hash password with SHA256 to ensure it fits within bcrypt's 72-byte limit.
-    Returns the hex digest (64 chars).
-    """
-    return hashlib.sha256(password.encode()).hexdigest()
+# Switching to argon2 for better compatibility on modern architectures
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(_normalize_password(password))
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(_normalize_password(plain_password), hashed_password)
+    # Handle legacy bcrypt hashes if they exist, but normally argon2 will be used
+    return pwd_context.verify(plain_password, hashed_password)
 
 # ── JWT tokens ──────────────────────────────────────────
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

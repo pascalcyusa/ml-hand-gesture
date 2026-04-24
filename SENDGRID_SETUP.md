@@ -55,7 +55,7 @@ MAIL_PORT=587
 MAIL_SERVER=smtp.sendgrid.net
 
 # Frontend URL (for the reset link)
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5174
 ```
 
 *Note: The `MAIL_USERNAME` for SendGrid is always the string `apikey`.*

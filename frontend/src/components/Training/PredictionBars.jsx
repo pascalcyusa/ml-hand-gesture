@@ -1,10 +1,14 @@
+import { ChartBarIcon } from '@heroicons/react/24/outline';
 import './PredictionBars.css';
 
 export default function PredictionBars({ predictions, classNames, threshold = 0.75 }) {
     if (!predictions || predictions.length === 0) {
         return (
             <div className="prediction-bars card">
-                <h3 className="prediction-bars-title">Predictions</h3>
+                <h3 className="prediction-bars-title">
+                    <ChartBarIcon className="w-5 h-5 inline mr-2 text-[var(--gold)]" />
+                    Predictions
+                </h3>
                 <div className="prediction-bars-empty">
                     <p>Train a model to see predictions</p>
                 </div>
@@ -15,6 +19,7 @@ export default function PredictionBars({ predictions, classNames, threshold = 0.
     return (
         <div className="prediction-bars card">
             <h3 className="prediction-bars-title">
+                <ChartBarIcon className="w-5 h-5 inline mr-2 text-[var(--gold)]" />
                 Predictions
                 <span className="prediction-threshold">threshold: {Math.round(threshold * 100)}%</span>
             </h3>

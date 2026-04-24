@@ -5,14 +5,20 @@ import WebcamPanel from './WebcamPanel.jsx';
 import ClassCard from './ClassCard.jsx';
 import PredictionBars from './PredictionBars.jsx';
 import TrainingControls from './TrainingControls.jsx';
+import AIRecipeCard from './AIRecipeCard.jsx';
 import LoadingOverlay from '../common/LoadingOverlay.jsx';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '../../utils/helpers.js';
 import './TrainTab.css';
 
-export default function TrainTab({ showToast, hand, cm, trainer, prediction, storage, auth }) {
+export default function TrainTab({ showToast, hand, cm, trainer, prediction, storage, auth, aiRecipe, setAiRecipe }) {
     const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [savedModels, setSavedModels] = useState([]);
+
+    useEffect(() => {
+        console.log('--- AI RECIPE STATE CHANGE ---', aiRecipe);
+    }, [aiRecipe]);
+
     const [isCameraStarted, setIsCameraStarted] = useState(hand.wasStarted || hand.isRunning);
     const videoReadyRef = useRef(false);
 
@@ -39,12 +45,20 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
         const needsModelLoad = !hand.isRunning;
         if (needsModelLoad) {
             setShowLoadingOverlay(true);
-            setLoadingMessage('Loading hand detection model...');
+            setLoadingMessage('Setting up the AI eyes...');
         }
-        await hand.start(videoEl, canvasEl);
-        if (needsModelLoad) {
-            setShowLoadingOverlay(false);
-            showToast('Hand detection ready!', 'success');
+        try {
+            await hand.start(videoEl, canvasEl);
+            if (needsModelLoad) {
+                showToast('The AI can see your hands now!', 'success');
+            }
+        } catch (err) {
+            console.error('Hand detection start error:', err);
+            showToast('Failed to start the AI vision', 'error');
+        } finally {
+            if (needsModelLoad) {
+                setShowLoadingOverlay(false);
+            }
         }
     }, [hand, showToast]);
 
@@ -60,6 +74,51 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
 
     const handleStartCamera = useCallback(() => {
         setIsCameraStarted(true);
+    }, []);
+
+    // Helper to calculate landmark statistics for the AI ML-Coach
+    const calculateDatasetStats = useCallback((trainingData, classNames) => {
+        const stats = {};
+        const { features, labels } = trainingData; // features: [ [x1,y1,z1...], ... ], labels: [ classIdx, ... ]
+
+        classNames.forEach((name, idx) => {
+            const classSamples = features.filter((_, i) => labels[i] === idx);
+            if (classSamples.length === 0) return;
+
+            // Centroid (average feature vector)
+            const centroid = classSamples[0].map((_, featureIdx) => 
+                classSamples.reduce((sum, sample) => sum + sample[featureIdx], 0) / classSamples.length
+            );
+
+            // Variance (avg Euclidean distance of samples to centroid)
+            const variance = classSamples.reduce((sum, sample) => {
+                const dist = Math.sqrt(sample.reduce((s, val, i) => s + Math.pow(val - centroid[i], 2), 0));
+                return sum + dist;
+            }, 0) / classSamples.length;
+
+            stats[name] = {
+                example_count: classSamples.length,
+                variance: parseFloat(variance.toFixed(4)),
+                centroid: centroid.slice(0, 3) // First 3 values (wrist x,y,z) as a representative point
+            };
+        });
+
+        // Overlap (distance between class centroids)
+        const overlaps = [];
+        const names = Object.keys(stats);
+        for (let i = 0; i < names.length; i++) {
+            for (let j = i + 1; j < names.length; j++) {
+                const c1 = stats[names[i]].centroid;
+                const c2 = stats[names[j]].centroid;
+                const dist = Math.sqrt(c1.reduce((s, val, idx) => s + Math.pow(val - c2[idx], 2), 0));
+                overlaps.push({
+                    pair: [names[i], names[j]],
+                    distance: parseFloat(dist.toFixed(4))
+                });
+            }
+        }
+
+        return { class_stats: stats, overlaps };
     }, []);
 
     // ── Collect sample ──
@@ -79,37 +138,91 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
     const handleTrain = useCallback(async () => {
         prediction.stopPredicting();
         setShowLoadingOverlay(true);
-        setLoadingMessage('Training model...');
+        setLoadingMessage('Teaching the AI your gestures...');
 
-        const trainingData = cm.getTrainingData();
+        try {
+            const trainingData = cm.getTrainingData();
 
-        if (auth.user) {
-            setLoadingMessage('Backing up training data...');
-            await storage.saveTrainingSession(cm.classNames, {
-                features: trainingData.features,
-                labels: trainingData.labels
-            });
-            setLoadingMessage('Training model...');
+            if (auth.user) {
+                setLoadingMessage('Saving your progress...');
+                await storage.saveTrainingSession(cm.classNames, {
+                    features: trainingData.features,
+                    labels: trainingData.labels
+                });
+                setLoadingMessage('Teaching the AI your gestures...');
+            }
+
+            const success = await trainer.train(trainingData);
+
+            if (success) {
+                showToast('AI is ready to go!', 'success');
+                prediction.startPredicting();
+
+                // Generate AI Recipe
+                if (auth.user) {
+                    console.log('User is logged in, generating AI recipe for:', cm.classNames);
+                    setLoadingMessage('AI Coach is thinking of some cool ideas...');
+                    
+                    // Calculate stats for the ML-Coach
+                    const stats = calculateDatasetStats(trainingData, cm.classNames);
+                    
+                    const result = await storage.generateAIRecipe(cm.classNames, stats);
+                    console.log('AI recipe result:', result);
+                    if (result && !result.error) {
+                        setAiRecipe(result);
+                        showToast('Your AI Recipe is ready! ✨', 'success');
+                    } else if (result && result.error) {
+                        showToast(`AI Recipe Error: ${result.error}`, 'warning');
+                    }
+                } else {
+                    showToast('Log in to unlock AI-powered ideas for your robot!', 'info');
+                }
+            } else {
+                showToast('Oops! The AI got confused. Try training again.', 'error');
+            }
+        } catch (err) {
+            console.error('Training handler error:', err);
+            showToast('An unexpected error occurred during training', 'error');
+        } finally {
+            setShowLoadingOverlay(false);
         }
-
-        const success = await trainer.train(trainingData);
-        setShowLoadingOverlay(false);
-
-        if (success) {
-            showToast('Model trained successfully!', 'success');
-            prediction.startPredicting();
-        } else {
-            showToast('Training failed — check console', 'error');
-        }
-    }, [cm, trainer, prediction, showToast, auth, storage]);
+    }, [cm, trainer, prediction, showToast, auth, storage, calculateDatasetStats]);
 
     // ── Reset ──
     const handleReset = useCallback(() => {
         prediction.stopPredicting();
         trainer.resetModel();
         cm.reset();
+        setAiRecipe(null);
         showToast('All data cleared', 'info');
     }, [prediction, trainer, cm, showToast]);
+
+    // ── AI Recipe Application Handlers ──
+    const handleApplyPiano = useCallback(async (recipe) => {
+        if (!recipe || !recipe.piano_config) return;
+        setLoadingMessage('Applying AI Piano Sequence...');
+        setShowLoadingOverlay(true);
+        try {
+            const success = await storage.savePianoSequence(`${recipe.recipe_name} (AI)`, recipe.piano_config, true);
+            if (success) showToast('AI Piano Sequence applied and saved!', 'success');
+            else showToast('Failed to apply AI sequence', 'error');
+        } finally {
+            setShowLoadingOverlay(false);
+        }
+    }, [storage, showToast]);
+
+    const handleApplyMotors = useCallback(async (recipe) => {
+        if (!recipe || !recipe.motor_config) return;
+        setLoadingMessage('Applying AI Motor Config...');
+        setShowLoadingOverlay(true);
+        try {
+            const success = await storage.saveGestureMapping(`${recipe.recipe_name} (AI)`, recipe.motor_config, true);
+            if (success) showToast('AI Motor Config applied and saved!', 'success');
+            else showToast('Failed to apply AI config', 'error');
+        } finally {
+            setShowLoadingOverlay(false);
+        }
+    }, [storage, showToast]);
 
     // ── Save/Load Logic ──
     const handleSave = useCallback(async (name, isPublic = false) => {
@@ -122,7 +235,7 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
                 const weightDataB64 = arrayBufferToBase64(artifacts.weightData);
                 const success = await storage.saveModel(
                     name, artifacts.modelTopology, artifacts.weightSpecs, weightDataB64,
-                    cm.classNames, { classes: cm.classes }, isPublic
+                    cm.classNames, { classes: cm.classes }, aiRecipe, isPublic
                 );
                 if (success) {
                     showToast(`Model "${name}" saved!`, 'success');
@@ -166,6 +279,14 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
                         weightData: base64ToArrayBuffer(weightData)
                     }));
                     trainer.setModel(model, modelData.class_names.length);
+                    
+                    // Restore AI Recipe if present
+                    if (modelData.ai_recipe) {
+                        setAiRecipe(modelData.ai_recipe);
+                    } else {
+                        setAiRecipe(null);
+                    }
+
                     showToast(`Model loaded!`, 'success');
                     prediction.startPredicting();
                 }
@@ -217,26 +338,28 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
 
                 {/* Right Panel */}
                 <div className="train-right">
-                    <div className="train-classes">
-                        <h2 className="train-section-title">
-                            Gesture Classes
-                        </h2>
-                        <div className="train-classes-list">
-                            {cm.classes.map((cls, index) => (
-                                <ClassCard
-                                    /* * FIX: Use cls.id if available, otherwise fallback to index.
-                                     * This prevents the 'coupling' bug if IDs are missing.
-                                     */
-                                    key={cls.id || index}
-                                    classData={cls}
-                                    onCollect={handleCollect}
-                                    onDeleteSample={cm.deleteSample}
-                                    onDelete={cm.deleteClass}
-                                    currentLandmarks={hand.currentLandmarks}
-                                />
-                            ))}
+                    <div className="train-main-content">
+                        <div className="train-classes-header flex justify-between items-center mb-4">
+                            <h2 className="train-section-title mb-0">
+                                Gesture Classes
+                            </h2>
                         </div>
-                    </div>
+                        <div className="train-classes-list">
+                                {cm.classes.map((cls, index) => (
+                                    <ClassCard
+                                        /* * FIX: Use cls.id if available, otherwise fallback to index.
+                                         * This prevents the 'coupling' bug if IDs are missing.
+                                         */
+                                        key={cls.id || index}
+                                        classData={cls}
+                                        onCollect={handleCollect}
+                                        onDeleteSample={cm.deleteSample}
+                                        onDelete={cm.deleteClass}
+                                        currentLandmarks={hand.currentLandmarks}
+                                    />
+                                ))}
+                            </div>
+                        </div>
 
                     <div className="train-predictions">
                         <PredictionBars
@@ -244,6 +367,15 @@ export default function TrainTab({ showToast, hand, cm, trainer, prediction, sto
                             classNames={cm.classNames}
                             threshold={prediction.confidenceThreshold}
                         />
+                        <div className="ai-recipe-container mt-6">
+                            <AIRecipeCard 
+                                recipe={aiRecipe} 
+                                onClear={() => setAiRecipe(null)} 
+                                user={auth.user}
+                                onApplyPiano={handleApplyPiano}
+                                onApplyMotors={handleApplyMotors}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

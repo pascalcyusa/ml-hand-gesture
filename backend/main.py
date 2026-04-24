@@ -18,6 +18,14 @@ Endpoints:
 """
 
 import os
+import json
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Ensure .env is loaded from the backend directory regardless of where the server is started
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -25,7 +33,8 @@ from starlette.responses import Response
 from sqlalchemy.orm import Session
 from database import engine, get_db
 import models
-from pydantic import BaseModel, Field, field_validator
+from google import genai
+from pydantic import BaseModel, Field, field_validator, ConfigDict, SecretStr
 from typing import List, Optional, Any
 from auth import (
     hash_password,
@@ -52,8 +61,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — allow frontend dev server and production domains
 # CORS and Frontend settings from environment
-origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5174,http://localhost:3000,http://127.0.0.1:5174")
+origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5174")
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,7 +94,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 class SignupRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50)
     email: str = Field(..., min_length=3, max_length=255)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=4, max_length=128)
 
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=255)
@@ -98,10 +108,20 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: str
 
-    class Config:
-        from_attributes = True
+class AIRecipeRequest(BaseModel):
+    class_names: List[str]
+    dataset_stats: Optional[dict] = None
+
+class AIRecipeResponse(BaseModel):
+    recipe_name: str
+    description: str
+    suggested_use_cases: List[str]
+    ml_feedback: Optional[str] = None
+    motor_config: Optional[dict] = None
+    piano_config: Optional[dict] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelSaveRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -109,6 +129,7 @@ class ModelSaveRequest(BaseModel):
     class_names: list = Field(..., max_length=50)
     model_data: dict   # { modelTopology, weightSpecs, weightData }
     dataset: Optional[dict] = None # { features: [], labels: [] }
+    ai_recipe: Optional[AIRecipeResponse] = None
     is_public: bool = False
 
     model_config = {
@@ -124,12 +145,12 @@ class ModelListItem(BaseModel):
     created_at: str
     author: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelDetail(ModelListItem):
     model_data: dict
     dataset: Optional[dict]
+    ai_recipe: Optional[AIRecipeResponse] = None
 
     model_config = {
         "protected_namespaces": ()
@@ -389,6 +410,7 @@ def save_model(req: ModelSaveRequest, user: models.User = Depends(require_user),
         existing.class_names = req.class_names
         existing.model_data = req.model_data
         existing.dataset = req.dataset
+        existing.ai_recipe = req.ai_recipe.model_dump() if req.ai_recipe else None
         existing.is_public = req.is_public
         db.commit()
         db.refresh(existing)
@@ -401,6 +423,7 @@ def save_model(req: ModelSaveRequest, user: models.User = Depends(require_user),
             class_names=req.class_names,
             model_data=req.model_data,
             dataset=req.dataset,
+            ai_recipe=req.ai_recipe.model_dump() if req.ai_recipe else None,
             is_public=req.is_public,
         )
         db.add(m)
@@ -474,6 +497,7 @@ def get_model(
         author=m.user.username,
         model_data=m.model_data,
         dataset=m.dataset,
+        ai_recipe=m.ai_recipe,
     )
 
 
@@ -770,3 +794,123 @@ def list_community_piano(
         )
         for s in results
     ]
+
+
+# ── AI Recipe Generation ──────────────────────────────
+@app.post("/ai/recipe", response_model=AIRecipeResponse)
+@limiter.limit("5/minute")
+async def generate_gesture_recipe(
+    request: Request,
+    data: AIRecipeRequest,
+    user: models.User = Depends(require_user),
+):
+    import traceback
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("AI Recipe Error: API Key missing from environment")
+        raise HTTPException(status_code=500, detail="Google API Key not configured")
+
+    try:
+        print(f"AI Recipe: Using key (first 4): {api_key[:4]}...")
+        print(f"AI Recipe: Class names received: {data.class_names}")
+        print(f"AI Recipe: Stats received: {data.dataset_stats}")
+        
+        client = genai.Client(api_key=api_key)
+        from google.genai import types
+        
+        # Log available models for debugging
+        try:
+            available_models = [m.name for m in client.models.list()]
+            print(f"AI Recipe: Available models: {available_models}")
+        except Exception as list_err:
+            print(f"AI Recipe: Could not list models: {list_err}")
+
+        prompt = f"""
+        You are a friendly Machine Learning Coach for middle school students.
+        The students are using this app to teach an AI to recognize hand gestures, which they then use to control LEGO Spike Prime robots and motors.
+        
+        The student just trained a model with these gesture names: {", ".join(data.class_names)}
+
+        Data Quality Stats (for your internal analysis):
+        {json.dumps(data.dataset_stats) if data.dataset_stats else "No statistical data available yet."}
+
+        Create a fun "Gesture Recipe Card" that helps them see what their model can do!
+
+        Your goals:
+        1. ML Coach Feedback ('ml_feedback'): Look at the stats. If there's high overlap or low variance, explain it like a coach. 
+           Instead of "variance" or "geometric distance", use terms like "shaky hands", "too similar", or "need more variety". 
+           BE ENCOURAGING. Example: "Great start! Your 'Wave' and 'High Five' look a bit similar to the AI. Try holding your hand at different angles to help it learn the difference!"
+        2. Interaction Designer: 
+           - 'recipe_name': Give it a cool, robotic, or creative name.
+           - 'description': Explain how these gestures could be used to control a robot.
+           - 'suggested_use_cases': List 3 fun ideas involving LEGO motors or robots (e.g., "Make a robot arm grab a snack", "Drive a rover through a maze").
+        3. Technical Integrator:
+           - 'motor_config': Map each gesture to a LEGO motor action. 
+             Actions: "run_for_degrees", "run_for_time", "start", "stop". Ports: "A", "B", "C", "D", "E", "F".
+             Example: {{ "Class1": [ {{ "port": "A", "action": "run_for_degrees", "speed": 50, "degrees": 90, "direction": "clockwise" }} ] }}
+           - 'piano_config': Map each gesture to a fun sound or note sequence (C3 to C5).
+
+        Respond ONLY with a valid JSON object.
+        JSON structure:
+        {{
+          "recipe_name": "Cool Robot Command",
+          "description": "How this helps your LEGO creation come to life!",
+          "suggested_use_cases": ["Idea 1", "Idea 2", "Idea 3"],
+          "ml_feedback": "Encouraging tips for better training",
+          "motor_config": {{ ... }},
+          "piano_config": {{ ... }}
+        }}
+        """
+
+        print("AI Recipe: Sending request to Gemini...")
+
+        # Try a list of models in order of preference
+        models_to_try = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"]
+        last_exception = None
+        response = None
+
+        for model_name in models_to_try:
+            try:
+                print(f"AI Recipe: Attempting with model: {model_name}")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type='application/json',
+                    )
+                )
+                print(f"AI Recipe: Success with {model_name}")
+                break # Exit loop on success
+            except Exception as e:
+                print(f"AI Recipe: Model {model_name} failed: {e}")
+                last_exception = e
+                continue # Try next model
+
+        if not response:
+            raise last_exception or Exception("All models failed to generate content")
+
+        try:
+            raw_text = response.text.strip()
+            print(f"AI Recipe: Raw response text: {raw_text[:200]}...")
+            
+            # Minimal cleaning for safety
+            if raw_text.startswith("```"):
+                import re
+                raw_text = re.sub(r'^```(?:json)?\n?|\n?```$', '', raw_text, flags=re.MULTILINE).strip()
+                
+            recipe_data = json.loads(raw_text)
+            return AIRecipeResponse(**recipe_data)
+        except Exception as parse_err:
+            print(f"AI Response Parsing Error: {parse_err}. Raw text: {response.text}")
+            raise HTTPException(status_code=500, detail=f"AI returned invalid format: {str(parse_err)}")
+
+    except Exception as e:
+        print("AI Generation Error Exception Type:", type(e).__name__)
+        print("AI Generation Error Message:", str(e))
+        traceback.print_exc()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Failed to generate recipe: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)

@@ -102,12 +102,12 @@ export default function ClassCard({
                 {sampleCount > 0 ? (
                     <div className="status-badge active">
                         <CheckCircleIcon className="status-icon" />
-                        <span>{sampleCount} Samples collected</span>
+                        <span>{sampleCount} Examples collected</span>
                     </div>
                 ) : (
                     <div className="status-badge">
                         <div className="h-2 w-2 rounded-full bg-gray-500 mr-2"></div>
-                        <span>0 Samples</span>
+                        <span>0 Examples</span>
                     </div>
                 )}
             </div>

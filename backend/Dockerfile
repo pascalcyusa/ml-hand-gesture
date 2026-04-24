@@ -1,5 +1,5 @@
 # backend/Dockerfile
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
-# Expose port (Cloud Run defaults to 8080, but can be configured)
-EXPOSE 8080
+# Expose port
+EXPOSE 8002
 
-# Start server using the PORT environment variable (Google Cloud Run convention)
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Start server using the PORT environment variable
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8002}

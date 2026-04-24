@@ -96,6 +96,7 @@ class SavedModel(Base):
     class_names = Column(JSON)             # ["thumbs_up", "peace"]
     model_data = Column(JSON)              # topology + weights (base64 encoded)
     dataset = Column(JSON, nullable=True)  # { features: [...], labels: [...] } for retraining
+    ai_recipe = Column(JSON, nullable=True) # Persist the Gemini-generated recipe
     is_public = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

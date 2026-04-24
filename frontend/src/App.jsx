@@ -28,6 +28,7 @@ import { useClassManager } from './hooks/useClassManager.js';
 import { useModelTrainer } from './hooks/useModelTrainer.js';
 import { usePredictionManager } from './hooks/usePredictionManager.js';
 import { useStorageManager } from './hooks/useStorageManager.js';
+import { useSessionStorage } from './hooks/useSessionStorage.js';
 import * as tf from '@tensorflow/tfjs';
 import { base64ToArrayBuffer } from './utils/helpers.js';
 
@@ -76,6 +77,8 @@ export default function App() {
   const trainer = useModelTrainer();
   const storage = useStorageManager();
 
+  const [aiRecipe, setAiRecipe] = useSessionStorage('ai_recipe_draft', null);
+
   const prediction = usePredictionManager({
     getFeatures: hand.getFeatures,
     predict: trainer.predict,
@@ -90,7 +93,7 @@ export default function App() {
       prediction.startPredicting();
       console.log('Auto-started predictions (model restored from session)');
     }
-  }, [trainer.isTrained, hand.isRunning, prediction.isPredicting, prediction.startPredicting]);
+  }, [trainer.isTrained, hand.isRunning, prediction.isPredicting, prediction]);
 
   // Import community model into local training
   const handleImportCommunityModel = useCallback(async (cloudModel) => {
@@ -109,6 +112,14 @@ export default function App() {
         const hasSamples = result.dataset && result.dataset.classes && !result.dataset.classes.every(c => !c.samples || c.samples.length === 0);
         trainer.setModel(model, result.classes.length, hasSamples);
         cm.restoreClasses(result.classes);
+        
+        // Restore AI Recipe
+        if (result.ai_recipe) {
+          setAiRecipe(result.ai_recipe);
+        } else {
+          setAiRecipe(null);
+        }
+
         navigate('/train');
 
         if (!hasSamples) {
@@ -153,6 +164,13 @@ export default function App() {
         const hasSamples = modelData.dataset && modelData.dataset.classes && !modelData.dataset.classes.every(c => !c.samples || c.samples.length === 0);
         trainer.setModel(model, modelData.class_names.length, hasSamples);
 
+        // Restore AI Recipe
+        if (modelData.ai_recipe) {
+          setAiRecipe(modelData.ai_recipe);
+        } else {
+          setAiRecipe(null);
+        }
+
         navigate('/train');
         showToast(`Loaded model: ${modelData.name}`, 'success');
       } else {
@@ -193,6 +211,8 @@ export default function App() {
                 prediction={prediction}
                 storage={storage}
                 auth={auth}
+                aiRecipe={aiRecipe}
+                setAiRecipe={setAiRecipe}
               />
             } />
 

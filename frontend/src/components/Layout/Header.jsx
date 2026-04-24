@@ -57,14 +57,14 @@ export default function Header({ user, onSignIn, onLogout }) {
         <div className="flex items-center gap-4">
           {/* Logo Area */}
           <Link to="/" className="logo-area">
-            <img
+            {/* <img
               src="/img/logo.png"
               alt="ML Hand Gesture"
               className="logo-img"
               width="100"
               height="100"
-            />
-            <h1 className="app-title hidden sm:block">Gesture</h1>
+            /> */}
+            <h1 className="app-title hidden sm:block"> ML Hand Gesture</h1>
           </Link>
         </div>
 

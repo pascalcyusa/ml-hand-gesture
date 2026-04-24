@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
     CheckCircleIcon,
     ExclamationCircleIcon,
@@ -18,21 +18,21 @@ const icons = {
 export default function Toast({ message, type = 'info', onClose, duration = 3000 }) {
     const [isExiting, setIsExiting] = useState(false);
 
+    const handleClose = useCallback(() => {
+        setIsExiting(true);
+        // Wait for animation to finish before actual unmount
+        setTimeout(() => {
+            onClose();
+        }, 300);
+    }, [onClose]);
+
     useEffect(() => {
         const timer = setTimeout(() => {
             handleClose();
         }, duration);
 
         return () => clearTimeout(timer);
-    }, [duration]);
-
-    const handleClose = () => {
-        setIsExiting(true);
-        // Wait for animation to finish before actual unmount
-        setTimeout(() => {
-            onClose();
-        }, 300);
-    };
+    }, [duration, handleClose]);
 
     return (
         <div className="toast-container">

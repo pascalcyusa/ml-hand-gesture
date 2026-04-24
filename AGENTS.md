@@ -33,7 +33,7 @@ This document provides essential information for AI agents working in the `ml-ha
     ```bash
     uvicorn main:app --reload
     ```
-    (Runs on `http://localhost:8000`)
+    (Runs on `http://localhost:8002`)
 
 **Frontend (`./frontend` directory):**
 
@@ -46,7 +46,7 @@ This document provides essential information for AI agents working in the `ml-ha
     ```bash
     bun run dev
     ```
-    (Typically runs on `http://localhost:5173`)
+    (Typically runs on `http://localhost:5174`)
 *   **Build for Production:**
     ```bash
     bun run build
@@ -118,5 +118,5 @@ No explicit test runner configurations or test scripts were found in `package.js
 *   **Environment Variables:** Both frontend and backend rely on environment variables, often loaded from `.env` files. Ensure these are correctly configured for local development and deployment. Refer to `LOCAL_DEV_GUIDE.md` and `SENDGRID_SETUP.md`.
 *   **Client-Side ML:** All machine learning training and inference occurs directly in the browser, ensuring user privacy. No camera data leaves the device.
 *   **Web Serial/Bluetooth:** The frontend interacts with external hardware (LEGO Spike Prime) using Web Serial and Web Bluetooth APIs, primarily managed by the `useSpikeDevice` hook. Browser permissions will be required for these features.
-*   **Port Numbers:** Backend runs on port `8000`, frontend development server typically runs on `5173`. Avoid conflicts.
+*   **Port Numbers:** Backend runs on port `8002`, frontend development server typically runs on `5174`. Avoid conflicts.
 *   **Code Generation/Build Process:** The frontend uses Vite, which handles its own build process. No special code generation steps were identified for the backend beyond standard Python package management.
