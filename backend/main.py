@@ -19,8 +19,12 @@ Endpoints:
 
 import os
 import json
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
+
+# Fix for passlib/bcrypt compatibility issue in newer Python versions
+logging.getLogger("passlib").setLevel(logging.ERROR)
 
 # Ensure .env is loaded from the backend directory regardless of where the server is started
 env_path = Path(__file__).parent / ".env"
@@ -49,8 +53,11 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Create tables
-models.Base.metadata.create_all(bind=engine)
+# Create tables (with resilience for connection lag)
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Startup Warning: Could not initialize database tables: {e}")
 
 # ── Rate Limiter ───────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
