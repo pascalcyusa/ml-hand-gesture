@@ -16,6 +16,10 @@ venv/
 *.sqlite
 backend/test.db
 
+s.md
+s-gpt.md
+s-gem.md
+
 # Frontend ignores
 logs
 *.log
